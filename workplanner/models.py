@@ -2,16 +2,17 @@ import json as orjson
 from functools import partial
 from typing import Union
 
+import peewee
 import pendulum
 import playhouse.sqlite_ext
 
-from work_planner import schemas
-from work_planner.database import db
-from work_planner.enums import Statuses
-from work_planner.fields import DateTimeUTCField
-from work_planner.utils import custom_encoder
+from workplanner import schemas
+from workplanner.database import db
+from workplanner.enums import Statuses
+from workplanner.fields import DateTimeUTCField
+from workplanner.utils import custom_encoder
 
-WorkplanQueryT: Union["Workplan.update", "Workplan.delete", "Workplan.select"]
+WorkplanQueryT = Union[peewee.ModelUpdate, peewee.ModelDelete, peewee.ModelSelect]
 
 
 class Workplan(playhouse.sqlite_ext.Model):
@@ -31,8 +32,8 @@ class Workplan(playhouse.sqlite_ext.Model):
     expires_utc = DateTimeUTCField(null=True)
     started_utc = DateTimeUTCField(null=True)
     finished_utc = DateTimeUTCField(null=True)
-    created_utc = DateTimeUTCField(default=pendulum.now("UTC"))
-    updated_utc = DateTimeUTCField(default=pendulum.now("UTC"))
+    created_utc = DateTimeUTCField(default=pendulum.now())
+    updated_utc = DateTimeUTCField(default=pendulum.now())
 
     class Meta:
         database = db
@@ -43,7 +44,8 @@ class Workplan(playhouse.sqlite_ext.Model):
 
     @classmethod
     def items_to_pydantic(
-        cls, items_or_query: Union[list["Workplan", ...], "Workplan.select"]
+        cls, items_or_query: Union[list["Workplan"], "peewee.ModelSelect"]
     ) -> schemas.WorkplanListGeneric[schemas.Workplan]:
         workplans = [item.to_pydantic() for item in items_or_query]
+
         return schemas.WorkplanListGeneric[schemas.Workplan](workplans=workplans)

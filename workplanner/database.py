@@ -1,18 +1,17 @@
+"""
+https://fastapi.tiangolo.com/advanced/sql-databases-peewee/
+"""
+import os
+import pathlib
 from contextvars import ContextVar
 
 import peewee
 
-"""
-https://fastapi.tiangolo.com/advanced/sql-databases-peewee/
-"""
-
-
-DATABASE_NAME = "test2.db"
 db_state_default = {"closed": None, "conn": None, "ctx": None, "transactions": None}
 db_state = ContextVar("db_state", default=db_state_default.copy())
 
 
-class PeeweeConnectionState(peewee._ConnectionState):
+class PeeweeConnectionState(peewee._ConnectionState):  # pylint: disable=C0321
     def __init__(self, **kwargs):
         super().__setattr__("_state", db_state)
         super().__init__(**kwargs)
@@ -24,6 +23,8 @@ class PeeweeConnectionState(peewee._ConnectionState):
         return self._state.get()[name]
 
 
-db = peewee.SqliteDatabase(DATABASE_NAME, check_same_thread=False)
-
-db._state = PeeweeConnectionState()
+path_to_db = os.getenv(
+    "WORKPLANNER_DATABASE_PATH", pathlib.Path.home() / "workplanner.db"
+)
+db = peewee.SqliteDatabase(path_to_db, check_same_thread=False)
+db._state = PeeweeConnectionState()  # pylint: disable=C0321

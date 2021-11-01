@@ -1,17 +1,16 @@
-import datetime as dt
+from fastapi import Depends, FastAPI
 
-from fastapi import Depends
-from fastapi import FastAPI
+from workplanner import database
+from workplanner import models
+from workplanner import schemas, errors, service, crud
+from workplanner.service import clear_statuses_of_lost_items
 
-from work_planner import database, schemas, crud, errors
-from work_planner import models
-from work_planner import service
+API_VERSION = "1.0.0"
 
 database.db.connect()
 database.db.create_tables([models.Workplan])
+clear_statuses_of_lost_items()
 database.db.close()
-
-app = FastAPI(debug=True, version="1.0.0", title="Work Planner")
 
 
 async def reset_db_state():
@@ -19,7 +18,7 @@ async def reset_db_state():
     database.db._state.reset()
 
 
-def get_db(db_state=Depends(reset_db_state)):
+def get_db(db_state=Depends(reset_db_state)):  # pylint: disable=W0613
     try:
         database.db.connect()
         yield
@@ -28,8 +27,11 @@ def get_db(db_state=Depends(reset_db_state)):
             database.db.close()
 
 
+app = FastAPI(version=API_VERSION, title="WorkPlanner")
+
+
 @app.post("/workplan/list", dependencies=[Depends(get_db)])
-def get_list_view(workplan_filter: schemas.WorkplanQueryFilter):
+def list_view(workplan_filter: schemas.WorkplanQueryFilter):
     items = workplan_filter.get_as_pydantic()
     response = schemas.ResponseGeneric(data=items)
 
@@ -37,8 +39,8 @@ def get_list_view(workplan_filter: schemas.WorkplanQueryFilter):
 
 
 @app.post("/workplan/update", dependencies=[Depends(get_db)])
-def update_workplan_view(workplan: schemas.WorkplanUpdate):
-    workplan = workplan.save()
+def update_view(workplan_update: schemas.WorkplanUpdate):
+    workplan = workplan_update.save()
     if workplan is None:
         response = schemas.ResponseGeneric(error=errors.ObjectNotFound)
     else:
@@ -56,42 +58,29 @@ def update_list_view(
     return response
 
 
-@app.post("/workplan/create/list", dependencies=[Depends(get_db)])
-def create_view(
-    data: schemas.CreateWorkplans,
+@app.post("/workplan/generate/list", dependencies=[Depends(get_db)])
+def generate_view(
+    data: schemas.GenerateWorkplans,
 ):
     dct = data.dict(exclude_unset=True)
-    select = service.get_items_for_execute(**dct)
-    workplans = models.Workplan.items_to_pydantic(select)
+    query = service.generate_workplans(**dct)
+    workplans = models.Workplan.items_to_pydantic(query)
     response = schemas.ResponseGeneric(data=workplans)
     return response
 
 
 @app.post("/workplan/execute/list", dependencies=[Depends(get_db)])
 def execute_list_view(workplan_name: schemas.WorkplanName):
-    select = service.execute_list(workplan_name.name)
-    workplans = models.Workplan.items_to_pydantic(select)
+    query = service.execute_list(workplan_name.name)
+    workplans = models.Workplan.items_to_pydantic(query)
     response = schemas.ResponseGeneric(data=workplans)
     return response
 
 
-@app.post("/workplan/clear", dependencies=[Depends(get_db)])
-def clear_view(workplan_filter: schemas.WorkplanQueryFilter):
-    count = crud.clear(query_filter=workplan_filter)
+@app.post("/workplan/delete", dependencies=[Depends(get_db)])
+def delete_view(workplan_filter: schemas.WorkplanQueryFilter):
+    count = crud.delete(query_filter=workplan_filter)
     response = schemas.ResponseGeneric(data=schemas.Affected(count=count))
-    return response
-
-
-@app.post("/workplan/next-worktime", dependencies=[Depends(get_db)])
-def next_worktime_view(data: schemas.NextWorktime):
-    interval_timedelta = dt.timedelta(seconds=data.total_seconds)
-    worktime_utc = service.next_worktime_utc(
-        name=data.name, interval_timedelta=interval_timedelta
-    )
-    worktime_utc_str = worktime_utc.strftime("%Y-%m-%dT%H:%M:%S")
-    response = schemas.ResponseGeneric[dict[str, str]](
-        data={"worktime_utc": worktime_utc_str}
-    )
     return response
 
 
@@ -105,7 +94,20 @@ def count_view(workplan_filter: schemas.WorkplanQueryFilter):
 @app.post("/workplan/count/by/list", dependencies=[Depends(get_db)])
 def count_by_view(workplan_fields: schemas.WorkplanFields):
     model_fields = workplan_fields.iter_model_fields()
-    select = crud.count_by(*model_fields)
-    workplans = list(select.dicts())
+    query = crud.count_by(*model_fields)
+    workplans = list(query.dicts())
     response = schemas.ResponseGeneric(data=workplans)
+    return response
+
+
+@app.post("/workplan/recreate", dependencies=[Depends(get_db)])
+def recreate_view(pk: schemas.WorkplanPK):
+    item = crud.recreate(pk.name, pk.worktime_utc)
+    return schemas.ResponseGeneric(data=item.to_pydantic())
+
+
+@app.post("/workplan/replay", dependencies=[Depends(get_db)])
+def replay_view(many_pk: schemas.WorkplanManyPK):
+    count = crud.replay(many_pk.name, many_pk.worktime_utc_list)
+    response = schemas.ResponseGeneric(data=schemas.Affected(count=count))
     return response

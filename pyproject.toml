@@ -1,0 +1,47 @@
+[tool.poetry]
+name = "WorkPlanner"
+version = "0.1.0"
+description = "Microservice for scheduling tasks"
+authors = ["Pavel Maksimov <vur21@ya.ru>"]
+keywords = ["python", "tasker", "scheduler", "task-manager", "task-scheduler"]
+license = "Apache-2.0"
+homepage = "https://github.com/pavelmaksimov/work-planner"
+include = [
+    "LICENSE",
+    "README.md",
+    "CHANGELOG.md",
+]
+packages = [
+    { include = "workplanner" },
+]
+readme = "README.md"
+repository = "https://github.com/pavelmaksimov/work-planner.git"
+
+[tool.poetry.dependencies]
+python = "^3.9"
+peewee = "^3.14"
+pendulum = "*"
+fastapi = "^0.70.*"
+orjson = "*"
+typer = "^0.4"
+loguru = "*"
+uvicorn = {extras = ["standart"], version = "*"}
+better-exceptions = "^0.3.3"
+
+
+[tool.poetry.dev-dependencies]
+black = "^21.10b0"
+coverage = "*"
+flake8 = "*"
+mccabe = "*"
+mypy = "*"
+pytest = "*"
+pylint = "*"
+tox = "*"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.scripts]
+workplanner = 'workplanner.__main__:cli'
