@@ -22,6 +22,7 @@ python = "^3.9"
 peewee = "^3.14"
 pendulum = "*"
 fastapi = "^0.70.*"
+databases= "*"
 orjson = "*"
 typer = "^0.4"
 loguru = "*"
@@ -38,10 +39,11 @@ mypy = "*"
 pytest = "*"
 pylint = "*"
 tox = "*"
+pydantic-factories = "*"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.poetry.scripts]
-workplanner = 'workplanner.__main__:cli'
+workplanner = 'workplanner.main:cli'

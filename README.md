@@ -1,10 +1,5 @@
 # Microservice for scheduling tasks
 
-
-Set path to SQLite database file via variable `WORKPLANNER_DATABASE_PATH`
-
-
-
 ## Install
     poetry add workplanner
 
@@ -14,6 +9,9 @@ or
 
 
 ## Run
+Set environment variable `WORKPLANNER_HOME`.\
+After run:
+
     workplanner run --help
     workplanner run
 

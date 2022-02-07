@@ -45,25 +45,7 @@ def scroll_to_last_interval_time(
     )[-1]
 
 
-def normalize_datetime(value: Optional[dt.datetime]) -> Optional[pendulum.DateTime]:
-    if not isinstance(value, pendulum.DateTime) and isinstance(value, dt.datetime):
-        if value.tzinfo is None:
-            value.replace(tzinfo=pendulum.timezone("UTC"))
-        value = pendulum.instance(value, tz=pendulum.timezone("UTC"))
-
-    elif isinstance(value, str):
-        value = pendulum.parse(value, tz=pendulum.timezone("UTC"))
-
-    return value
-
-
 def strftime_utc(value: pendulum.DateTime) -> str:
-    value = value.astimezone(pendulum.timezone("UTC"))
+    value = value.astimezone(pendulum.UTC)
     value = value.replace(tzinfo=None, microsecond=0)
     return value.isoformat()
-
-
-def custom_encoder(obj):
-    if isinstance(obj, (pendulum.Date, pendulum.DateTime)):
-        return str(obj)
-    raise TypeError

@@ -1,0 +1,19 @@
+import os
+
+from pathlib import Path
+
+SETTINGS_FILENAME = ".env"
+HOME_DIR_VARNAME = 'WORKPLANNER_HOME'
+DEFAULT_HOST = "127.0.0.1"
+DEFAULT_PORT = 14444
+DEFAULT_LOGLEVEL = "INFO"
+DEFAULT_DEBUG = False
+DEFAULT_PROCESS_TIME_LIMIT = 3600
+DEFAULT_PROCESS_MAX_RETRIES = 3
+DEFAULT_RETRY_DELAY_SECONDS = 60
+
+
+def HOMEPATH() -> Path:
+    if os.environ.get("PYTEST"):
+        return Path()
+    return Path(os.environ[HOME_DIR_VARNAME])

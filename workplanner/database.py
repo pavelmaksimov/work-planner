@@ -1,30 +1,11 @@
-"""
-https://fastapi.tiangolo.com/advanced/sql-databases-peewee/
-"""
-import os
-import pathlib
-from contextvars import ContextVar
+import databases
+import sqlalchemy
 
-import peewee
+from workplanner.settings import Settings
 
-db_state_default = {"closed": None, "conn": None, "ctx": None, "transactions": None}
-db_state = ContextVar("db_state", default=db_state_default.copy())
-
-
-class PeeweeConnectionState(peewee._ConnectionState):  # pylint: disable=C0321
-    def __init__(self, **kwargs):
-        super().__setattr__("_state", db_state)
-        super().__init__(**kwargs)
-
-    def __setattr__(self, name, value):
-        self._state.get()[name] = value
-
-    def __getattr__(self, name):
-        return self._state.get()[name]
-
-
-path_to_db = os.getenv(
-    "WORKPLANNER_DATABASE_PATH", pathlib.Path.home() / "workplanner.db"
+db = databases.Database(str(Settings().dbpath))
+metadata = sqlalchemy.MetaData()
+engine = sqlalchemy.create_engine(
+    str(Settings().dbpath), connect_args={"check_same_thread": False}
 )
-db = peewee.SqliteDatabase(path_to_db, check_same_thread=False)
-db._state = PeeweeConnectionState()  # pylint: disable=C0321
+metadata.create_all(engine)

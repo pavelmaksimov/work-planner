@@ -4,7 +4,7 @@ import pendulum
 import pytest
 
 from workplanner import crud, service
-from workplanner.enums import Statuses
+from enums import Statuses
 
 
 def test_datetime_utc_field(workplan_item):
@@ -337,16 +337,16 @@ def test_allow_execute_flow(workplan_model, freeze_today):
 def test_generate_workplans_without_keep_sequence(workplan_model, freeze_today):
     service.fill_missing(
         workplan_model.name_for_test,
-        start_time=freeze_today - dt.timedelta(minutes=4),
-        end_time=freeze_today - dt.timedelta(minutes=4),
-        interval_timedelta=dt.timedelta(minutes=1),
+        start_time=freeze_today - dt.timedelta(hours=5),
+        end_time=freeze_today - dt.timedelta(hours=4),
+        interval_timedelta=dt.timedelta(hours=1),
         data={workplan_model.status.name: Statuses.success},
     )
 
     items = service.generate_workplans(
         name=workplan_model.name_for_test,
-        start_time=freeze_today - dt.timedelta(minutes=10),
-        interval_timedelta=dt.timedelta(minutes=1),
+        start_time=freeze_today - dt.timedelta(hours=5),
+        interval_in_seconds=dt.timedelta(hours=1).total_seconds(),
         keep_sequence=False,
         max_retries=0,
         retry_delay=0,
@@ -355,6 +355,23 @@ def test_generate_workplans_without_keep_sequence(workplan_model, freeze_today):
     )
 
     assert len(items) == 1
+
+
+def test_next_worktime(workplan_model, freeze_today):
+    service.fill_missing(
+        workplan_model.name_for_test,
+        start_time=freeze_today - dt.timedelta(hours=5),
+        end_time=freeze_today - dt.timedelta(hours=4),
+        interval_timedelta=dt.timedelta(hours=1),
+        data={workplan_model.status.name: Statuses.success},
+    )
+
+    result = service.next_worktime(
+        workplan_model.name_for_test,
+        interval_timedelta=dt.timedelta(hours=1),
+    )
+
+    assert result == freeze_today
 
 
 def test_generate_workplans_with_keep_sequence(workplan_model, freeze_today):

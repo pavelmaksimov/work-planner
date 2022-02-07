@@ -1,25 +1,29 @@
 import json as orjson
+import uuid
 from functools import partial
 from typing import Union
 
 import peewee
 import pendulum
 import playhouse.sqlite_ext
+import sqlalchemy
 
-from workplanner import schemas
-from workplanner.database import db
-from workplanner.enums import Statuses
-from workplanner.fields import DateTimeUTCField
-from workplanner.utils import custom_encoder
-
-WorkplanQueryT = Union[peewee.ModelUpdate, peewee.ModelDelete, peewee.ModelSelect]
+from pbm_helper.utils import custom_encoder
+from pbm_helper.workplanner import schemas
+from pbm_helper.workplanner.enums import Statuses
+from .database import metadata
+from .fields import DateTimeUTCField
 
 
 class Workplan(playhouse.sqlite_ext.Model):
     name = playhouse.sqlite_ext.CharField()
     worktime_utc = DateTimeUTCField()
 
-    status = playhouse.sqlite_ext.CharField(default=Statuses.add, null=False)
+    id = playhouse.sqlite_ext.UUIDField(unique=True, index=True, default=uuid.uuid4())
+
+    status = playhouse.sqlite_ext.CharField(
+        default=Statuses.add, null=False, index=True
+    )
     hash = playhouse.sqlite_ext.CharField(default="", null=False)
     retries = playhouse.sqlite_ext.IntegerField(default=0)
     info = playhouse.sqlite_ext.TextField(null=True)
@@ -28,7 +32,9 @@ class Workplan(playhouse.sqlite_ext.Model):
         json_dumps=partial(orjson.dumps, default=custom_encoder),
         json_loads=orjson.loads,
     )
-    duration = playhouse.sqlite_ext.IntegerField(null=True)
+    duration = playhouse.sqlite_ext.IntegerField(
+        null=True
+    )  # TODO: вычистывать чере разницу finished_utc и started_utc
     expires_utc = DateTimeUTCField(null=True)
     started_utc = DateTimeUTCField(null=True)
     finished_utc = DateTimeUTCField(null=True)
@@ -49,3 +55,13 @@ class Workplan(playhouse.sqlite_ext.Model):
         workplans = [item.to_pydantic() for item in items_or_query]
 
         return schemas.WorkplanListGeneric[schemas.Workplan](workplans=workplans)
+
+
+workplans = sqlalchemy.Table(
+    "workplans",
+    metadata,
+    sqlalchemy.Column("name", sqlalchemy.String(100), primary_key=True),
+    sqlalchemy.Column("worktime_utc", sqlalchemy.DateTime, primary_key=True),
+    sqlalchemy.Column("id", sqlalchemy.BigInteger, index=True),
+    id=playhouse.sqlite_ext.UUIDField(unique=True, index=True, default=uuid.uuid4()),
+)

@@ -1,20 +1,31 @@
+import os
+
 import uuid
 
 import pendulum
 import pytest
 
-from workplanner import database
-from workplanner import models
+import database, const
+import models
+
+
+def pytest_sessionstart():
+    pass
+
+
+def pytest_unconfigure():
+    pass
 
 
 @pytest.fixture(autouse=True)
-def preparation_for_tests(tmp_path):
+def before_test(tmp_path):
+    os.environ[const.HOME_DIR_VARNAME] = str(tmp_path.parent)
+
     database.db.database = str(tmp_path.parent / "workplanner-test.db")
-    print(f"\nWORKPLANNER_DATABASE_PATH={database.db.database}")
+    print(f"\nDATABASE-PATH={database.db.database}")
     database.db.connect()
     database.db.create_tables([models.Workplan])
     yield
-    models.Workplan.truncate_table()
     database.db.close()
 
 

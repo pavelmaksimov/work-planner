@@ -3,13 +3,14 @@ from typing import Optional
 import peewee
 import pendulum
 
-from workplanner.utils import normalize_datetime, strftime_utc
+from utils import strftime_utc
+from pbm_helper.utils import normalize_datetime
 
 
 class DateTimeUTCField(peewee.DateTimeField):
     def python_value(self, value: str) -> Optional[pendulum.DateTime]:
         if value is not None:
-            return pendulum.parse(value, tz=pendulum.timezone("UTC"))
+            return pendulum.parse(value, tz=pendulum.UTC)
 
         return None
 

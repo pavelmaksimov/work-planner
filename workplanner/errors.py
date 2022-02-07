@@ -1,3 +1,3 @@
-from workplanner.schemas import Error
+from pbm_helper.workplanner.schemas import Error
 
-ObjectNotFound = Error(code=8800, message="Object not found")
+not_found = Error(code=404, message="Object not found")

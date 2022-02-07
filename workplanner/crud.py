@@ -1,24 +1,28 @@
 import datetime as dt
-from typing import Optional
-
 import peewee
 import pendulum
+from typing import Optional, Union, Any
 
-from workplanner import schemas, models
-from workplanner.database import db
-from workplanner.enums import Statuses
-from workplanner.models import Workplan
+from pbm_helper.workplanner import schemas
+from pbm_helper.workplanner.enums import Statuses, Operators
+from pbm_helper.workplanner.schemas import WorkplanListGeneric, WorkplanQuery, FieldFilterGeneric
+from database import db
+from models import Workplan
+
+QueryT = Union[peewee.ModelUpdate, peewee.ModelDelete, peewee.ModelSelect]
 
 
 def update(workplan: schemas.WorkplanUpdate) -> Optional[Workplan]:
-    data = workplan.dict(exclude_unset=True)
-    data[Workplan.updated_utc.name] = pendulum.now()
-    item = get_by_pk(workplan.name, workplan.worktime_utc)
+    if workplan.id:
+        item = get_by_id(workplan.id)
+    else:
+        item = get_by_pk(workplan.name, workplan.worktime_utc)
 
     if item is not None:
-        for k, v in data.items():
+        for k, v in workplan.dict(exclude_unset=True).items():
             setattr(item, k, v)
 
+        item.updated_utc = pendulum.now()
         item.save()
 
         return item
@@ -67,7 +71,7 @@ def iter_items(
     *,
     name: str = None,
     statuses: Optional[list[Statuses.LiteralT]] = None,
-    query_filter: schemas.WorkplanQueryFilter = None,
+    query_filter: schemas.WorkplanQuery = None,
 ) -> peewee.ModelSelect:
     query = (
         Workplan.select()
@@ -75,7 +79,7 @@ def iter_items(
         .order_by(Workplan.worktime_utc.desc())
     )
     if query_filter is not None:
-        query = query_filter.set_where(query).execute()
+        query = query_filter.prepare(query).execute()
 
     if name is not None:
         query = query.where(Workplan.name == name)
@@ -95,12 +99,12 @@ def iter_items_of_page(
     *,
     name: str = None,
     statuses: Optional[list[Statuses.LiteralT]] = None,
-    query_filter: schemas.WorkplanQueryFilter = None,
+    query_filter: schemas.WorkplanQuery = None,
 ) -> peewee.ModelSelect:
     query = Workplan.select().order_by(Workplan.worktime_utc.desc())
 
     if query_filter is not None:
-        query = query_filter.set_where(query).execute()
+        query = query_filter.prepare(query).execute()
 
     if name is not None:
         query = query.where(Workplan.name == name)
@@ -128,6 +132,10 @@ def get_by_pk(name: str, worktime: pendulum.DateTime) -> Optional["Workplan"]:
         .where(Workplan.name == name, Workplan.worktime_utc == worktime)
         .first()
     )
+
+
+def get_by_id(id) -> Optional["Workplan"]:
+    return Workplan.select().where(Workplan.id == id).first()
 
 
 def get_by_name_and_worktimes(
@@ -165,12 +173,12 @@ def delete(
     name: str = None,
     from_time_utc: Optional[dt.datetime] = None,
     to_time_utc: Optional[dt.datetime] = None,
-    query_filter: schemas.WorkplanQueryFilter = None,
+    query_filter: schemas.WorkplanQuery = None,
 ) -> int:
     query = Workplan.delete()
 
     if query_filter is not None:
-        query = query_filter.set_where(query)
+        query = query_filter.prepare(query)
 
     if name:
         query = query.where(Workplan.name == name)
@@ -198,12 +206,12 @@ def many_recreate(
     filter_statuses: Optional[tuple[Statuses.LiteralT]] = None,
     from_time_utc: Optional[dt.datetime] = None,
     to_time_utc: Optional[dt.datetime] = None,
-    query_filter: schemas.WorkplanQueryFilter = None,
+    query_filter: schemas.WorkplanQuery = None,
 ) -> list["Workplan"]:
     query = Workplan.select(Workplan.name, Workplan.worktime_utc)
 
     if query_filter is not None:
-        query = query_filter.set_where(query).execute()
+        query = query_filter.prepare(query).execute()
 
     if name:
         query = query.where(Workplan.name == name)
@@ -223,14 +231,14 @@ def set_status(
     *,
     from_time_utc: Optional[dt.datetime] = None,
     to_time_utc: Optional[dt.datetime] = None,
-    query_filter: schemas.WorkplanQueryFilter = None,
+    query_filter: schemas.WorkplanQuery = None,
 ) -> int:
-    query = models.Workplan.update(**{models.Workplan.status.name: new_status}).where(
+    query = Workplan.update(**{Workplan.status.name: new_status}).where(
         Workplan.name == name
     )
 
     if query_filter is not None:
-        query = query_filter.set_where(query).execute()
+        query = query_filter.prepare(query).execute()
 
     if from_time_utc:
         query = query.where(Workplan.worktime_utc >= from_time_utc)
@@ -240,11 +248,10 @@ def set_status(
     return query.execute()
 
 
-def replay(name: str, worktimes: list[pendulum.DateTime], data: dict = None) -> int:
+def replay_by_pk(name: str, worktimes: list[pendulum.DateTime]) -> int:
     return (
         Workplan.update(
             **{
-                **(data or {}),
                 Workplan.status.name: Statuses.add,
                 Workplan.retries.name: Workplan.retries + 1,
                 Workplan.info.name: None,
@@ -255,3 +262,101 @@ def replay(name: str, worktimes: list[pendulum.DateTime], data: dict = None) -> 
         .where(Workplan.name == name, Workplan.worktime_utc.in_(worktimes))
         .execute()
     )
+
+
+def replay_by_id(id: str) -> int:
+    return (
+        Workplan.update(
+            **{
+                Workplan.status.name: Statuses.add,
+                Workplan.retries.name: Workplan.retries + 1,
+                Workplan.info.name: None,
+                Workplan.duration.name: None,
+                Workplan.updated_utc.name: pendulum.now(),
+            }
+        )
+        .where(Workplan.id == id)
+        .execute()
+    )
+
+
+class QueryFilter:
+    def __init__(self, schema: WorkplanQuery):
+        self.schema = schema
+
+    def filter_expr(  # pylint: disable=R0911,R0912
+        self, model_field: peewee.Field, field_schema: FieldFilterGeneric
+    ) -> Union[peewee.Expression, peewee.Negated]:
+        if field_schema.operator == Operators.equal:
+            return model_field == field_schema.value
+
+        if field_schema.operator == Operators.not_equal:
+            return model_field != field_schema.value
+
+        if field_schema.operator == Operators.like:
+            return model_field % field_schema.value
+
+        if field_schema.operator == Operators.not_like:
+            return ~(model_field % field_schema.value)
+
+        if field_schema.operator == Operators.ilike:
+            return model_field ** field_schema.value
+
+        if field_schema.operator == Operators.not_ilike:
+            return ~(model_field ** field_schema.value)
+
+        if field_schema.operator == Operators.in_:
+            return model_field.in_(field_schema.value)
+
+        if field_schema.operator == Operators.not_in:
+            return model_field.not_in(field_schema.value)
+
+        if field_schema.operator == Operators.contains:
+            return model_field.contains(field_schema.value)
+
+        if field_schema.operator == Operators.not_contains:
+            return ~(model_field.contains(field_schema.value))
+
+        if field_schema.operator == Operators.less:
+            return model_field < field_schema.value
+
+        if field_schema.operator == Operators.less_or_equal:
+            return ~(model_field <= field_schema.value)
+
+        if field_schema.operator == Operators.more:
+            return model_field > field_schema.value
+
+        if field_schema.operator == Operators.more_or_equal:
+            return ~(model_field >= field_schema.value)
+
+        raise NotImplementedError()
+
+    def set_where(self, query: "QueryT") -> "QueryT":
+        for name in self.schema.filter.dict(exclude_unset=True):
+            field_filters = getattr(self.schema.filter, name)
+            if field_filters is not None:
+                model_field = getattr(Workplan, name)
+                for filter in field_filters:
+                    filter: FieldFilterGeneric
+                    query = query.where(self.filter_expr(model_field, filter))
+
+        return query
+
+    def prepare(self, query: "QueryT") -> "QueryT":
+        query = self.set_where(query)
+
+        if self.schema.order_by:
+            query = query.order_by(*self.schema.order_by)
+
+        offset = None
+        if self.schema.page is not None:
+            page = self.schema.page - 1 if self.schema.page > 0 else self.schema.page
+            offset = page * self.schema.limit
+
+        return query.limit(self.schema.limit).offset(offset)
+
+    def get_select_query(self) -> peewee.ModelSelect:
+        return self.prepare(Workplan.select())
+
+    def count(self) -> int:
+        return self.get_select_query().count()
