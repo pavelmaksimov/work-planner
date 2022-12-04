@@ -1,5 +1,7 @@
 *.db
 *.txt
+*cache
+
 
 # Created by .ignore support plugin (hsz.mobi)
 ### Python template

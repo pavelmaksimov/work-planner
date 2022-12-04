@@ -1,67 +1,54 @@
-import json as orjson
+import datetime as dt
 import uuid
-from functools import partial
-from typing import Union
 
-import peewee
 import pendulum
-import playhouse.sqlite_ext
-import sqlalchemy
+import sqlalchemy as sa
+from script_master_helper.workplanner.enums import Statuses
+from sqlalchemy.ext.hybrid import hybrid_property
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
-from pbm_helper.utils import custom_encoder
-from pbm_helper.workplanner import schemas
-from pbm_helper.workplanner.enums import Statuses
-from .database import metadata
-from .fields import DateTimeUTCField
+from workplanner.fields import PendulumDateTime
 
 
-class Workplan(playhouse.sqlite_ext.Model):
-    name = playhouse.sqlite_ext.CharField()
-    worktime_utc = DateTimeUTCField()
+class Base(DeclarativeBase):
+    pass
 
-    id = playhouse.sqlite_ext.UUIDField(unique=True, index=True, default=uuid.uuid4())
 
-    status = playhouse.sqlite_ext.CharField(
-        default=Statuses.add, null=False, index=True
+class Workplan(Base):
+    __tablename__ = "workplans"
+
+    name: Mapped[str] = mapped_column(sa.String(100), primary_key=True)
+    worktime_utc: Mapped[dt.datetime] = mapped_column(
+        PendulumDateTime, primary_key=True
     )
-    hash = playhouse.sqlite_ext.CharField(default="", null=False)
-    retries = playhouse.sqlite_ext.IntegerField(default=0)
-    info = playhouse.sqlite_ext.TextField(null=True)
-    data = playhouse.sqlite_ext.JSONField(
-        default={},
-        json_dumps=partial(orjson.dumps, default=custom_encoder),
-        json_loads=orjson.loads,
+    id: Mapped[uuid.UUID] = mapped_column(
+        sa.Uuid, nullable=False, index=True, unique=True, default=uuid.uuid4
     )
-    duration = playhouse.sqlite_ext.IntegerField(
-        null=True
-    )  # TODO: вычистывать чере разницу finished_utc и started_utc
-    expires_utc = DateTimeUTCField(null=True)
-    started_utc = DateTimeUTCField(null=True)
-    finished_utc = DateTimeUTCField(null=True)
-    created_utc = DateTimeUTCField(default=pendulum.now())
-    updated_utc = DateTimeUTCField(default=pendulum.now())
+    status: Mapped[str] = mapped_column(
+        sa.String(30), index=True, nullable=False, default=Statuses.default
+    )
+    hash: Mapped[str] = mapped_column(sa.String(30), nullable=True)
+    retries: Mapped[int] = mapped_column(default=0, nullable=False)
+    info: Mapped[str] = mapped_column(nullable=True)
+    data: Mapped[dict] = mapped_column(sa.JSON, default="{}", nullable=False)
+    expires_utc: Mapped[dt.datetime] = mapped_column(PendulumDateTime, nullable=True)
+    started_utc: Mapped[dt.datetime] = mapped_column(PendulumDateTime, nullable=True)
+    finished_utc: Mapped[dt.datetime] = mapped_column(PendulumDateTime, nullable=True)
+    created_utc: Mapped[dt.datetime] = mapped_column(
+        PendulumDateTime, default=lambda: pendulum.now(), server_default=sa.func.now()
+    )
+    updated_utc: Mapped[dt.datetime] = mapped_column(
+        PendulumDateTime,
+        default=lambda: pendulum.now(),
+        server_default=sa.func.now(),
+        onupdate=sa.func.now(),
+    )
 
-    class Meta:
-        database = db
-        primary_key = playhouse.sqlite_ext.CompositeKey("name", "worktime_utc")
+    @property
+    def pk(self):
+        return self.name, self.worktime_utc
 
-    def to_pydantic(self) -> schemas.Workplan:
-        return schemas.Workplan.from_orm(self)
-
-    @classmethod
-    def items_to_pydantic(
-        cls, items_or_query: Union[list["Workplan"], "peewee.ModelSelect"]
-    ) -> schemas.WorkplanListGeneric[schemas.Workplan]:
-        workplans = [item.to_pydantic() for item in items_or_query]
-
-        return schemas.WorkplanListGeneric[schemas.Workplan](workplans=workplans)
-
-
-workplans = sqlalchemy.Table(
-    "workplans",
-    metadata,
-    sqlalchemy.Column("name", sqlalchemy.String(100), primary_key=True),
-    sqlalchemy.Column("worktime_utc", sqlalchemy.DateTime, primary_key=True),
-    sqlalchemy.Column("id", sqlalchemy.BigInteger, index=True),
-    id=playhouse.sqlite_ext.UUIDField(unique=True, index=True, default=uuid.uuid4()),
-)
+    @hybrid_property
+    def duration(self) -> int | None:
+        if self.finished_utc and self.started_utc:
+            return int((self.finished_utc - self.started_utc).total_seconds())

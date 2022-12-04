@@ -1,10 +1,7 @@
-import os
-
 from confz import ConfZ, ConfZEnvSource, ConfZCLArgSource, ConfZFileSource
-from pathlib import Path
 from pydantic import validator
 
-import const
+from workplanner import const
 
 
 class Settings(ConfZ):
@@ -14,23 +11,45 @@ class Settings(ConfZ):
 
     ConfZ converts ENV variables to lowercase, so lowercase must also be used in the config.
     """
-    dbpath: Path
+
+    database_url: str = None
     host: str = const.DEFAULT_HOST
     port: int = const.DEFAULT_PORT
-    loglevel: str = const.DEFAULT_LOGLEVEL
     debug: bool = const.DEFAULT_DEBUG
+    loglevel: str = const.DEFAULT_LOGLEVEL
+    logs_rotation: str = const.DEFAULT_LOGS_ROTATION
+    logs_retention: str = const.DEFAULT_LOGS_RETENTION
 
     CONFIG_SOURCES = [
-        ConfZEnvSource(allow_all=True, file=const.HOMEPATH() / const.SETTINGS_FILENAME),
-        ConfZEnvSource(allow_all=True, prefix="WORKPLANNER_", file=const.HOMEPATH() / const.SETTINGS_FILENAME),
-        ConfZFileSource(optional=True, file_from_cl="--settings-file", file_from_env="WORKPLANNER_SETTINGS_FILE"),
         ConfZCLArgSource(),
+        ConfZEnvSource(
+            allow_all=True, file=const.get_homepath() / const.SETTINGS_FILENAME
+        ),
+        ConfZEnvSource(
+            allow_all=True,
+            prefix="WORKPLANNER_",
+            file=const.get_homepath() / const.SETTINGS_FILENAME,
+        ),
+        ConfZFileSource(
+            optional=True,
+            file_from_cl="--settings-file",
+            file_from_env="WORKPLANNER_SETTINGS_FILE",
+        ),
     ]
 
-    def __init__(self, **kwargs):
-        if os.environ.get("PYTEST"):
-            kwargs.setdefault("dbpath", "NotImplemented")
+    @property
+    def default_database_url(self):
+        db_path = const.get_homepath() / "workplanner.db"
+        return f"sqlite:///{db_path}"
 
+    @property
+    def logpath(self):
+        dir = const.get_homepath() / "logs"
+        dir.mkdir(exist_ok=True)
+
+        return dir / "workplanner.log"
+
+    def __init__(self, **kwargs):
         super(Settings, self).__init__(**kwargs)
 
     @validator("loglevel")

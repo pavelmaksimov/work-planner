@@ -1,26 +1,25 @@
-from typing import Optional
+import datetime as dt
 
-import peewee
 import pendulum
+from sqlalchemy import DateTime
+from sqlalchemy.sql.type_api import TypeDecorator
 
-from utils import strftime_utc
-from pbm_helper.utils import normalize_datetime
 
+class PendulumDateTime(TypeDecorator):
+    impl = DateTime
+    cache_ok = True
 
-class DateTimeUTCField(peewee.DateTimeField):
-    def python_value(self, value: str) -> Optional[pendulum.DateTime]:
+    def process_bind_param(self, value, dialect):
+        if isinstance(value, (dt.date, dt.datetime)) and value.tzinfo:
+            value = value.astimezone(pendulum.UTC).replace(tzinfo=None, microsecond=0)
+
+        if isinstance(value, (pendulum.Date, pendulum.DateTime)) and value.tzinfo:
+            value = (
+                value.astimezone(pendulum.UTC).replace(tzinfo=None).start_of("second")
+            )
+        return value
+
+    def process_result_value(self, value, dialect):
         if value is not None:
-            return pendulum.parse(value, tz=pendulum.UTC)
-
-        return None
-
-    def db_value(self, value: Optional[pendulum.DateTime]) -> Optional[str]:
-        if value is not None:
-            value = normalize_datetime(value)
-
-            if value.tzinfo is None:
-                raise ValueError(f"{value} timezone not set.")
-
-            value = strftime_utc(value)
-
+            value = pendulum.instance(value, pendulum.UTC)
         return value

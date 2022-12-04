@@ -18,28 +18,28 @@ readme = "README.md"
 repository = "https://github.com/pavelmaksimov/work-planner.git"
 
 [tool.poetry.dependencies]
-python = "^3.9"
-peewee = "^3.14"
+python = "^3.10"
+sqlalchemy = "^2.0b"
 pendulum = "*"
-fastapi = "^0.70.*"
-databases= "*"
+fastapi = "^0.88"
 orjson = "*"
 typer = "^0.4"
 loguru = "*"
 uvicorn = {extras = ["standart"], version = "*"}
-better-exceptions = "^0.3.3"
-
+better-exceptions = "*"
+confz = "*"
 
 [tool.poetry.dev-dependencies]
-black = "^21.10b0"
+black = "*"
 coverage = "*"
-flake8 = "*"
+flake8 = "^6.0"
+factory-boy = "*"
 mccabe = "*"
 mypy = "*"
 pytest = "*"
 pylint = "*"
-tox = "*"
 pydantic-factories = "*"
+tox = "*"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

@@ -1,12 +1,13 @@
-import pendulum
+import datetime as dt
 
-from pbm_helper.workplanner.enums import Statuses
-from models import Workplan
+from script_master_helper.workplanner.enums import Statuses
 
-not_expired = (pendulum.now().timestamp() < Workplan.expires_utc.to_timestamp()) | (
-    Workplan.expires_utc.is_null()
+from workplanner.models import Workplan
+
+not_expired = (dt.datetime.utcnow() < Workplan.expires_utc) | (
+    Workplan.expires_utc.is_(None)
 )
 
-expired = pendulum.now().timestamp() >= Workplan.expires_utc.to_timestamp()
+expired = dt.datetime.utcnow() >= Workplan.expires_utc
 
 for_executed = (Workplan.status.in_(Statuses.for_executed), not_expired)
