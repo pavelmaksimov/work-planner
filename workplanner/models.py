@@ -35,11 +35,11 @@ class Workplan(Base):
     started_utc: Mapped[dt.datetime] = mapped_column(PendulumDateTime, nullable=True)
     finished_utc: Mapped[dt.datetime] = mapped_column(PendulumDateTime, nullable=True)
     created_utc: Mapped[dt.datetime] = mapped_column(
-        PendulumDateTime, default=lambda: pendulum.now(), server_default=sa.func.now()
+        PendulumDateTime, default=pendulum.now, server_default=sa.func.now()
     )
     updated_utc: Mapped[dt.datetime] = mapped_column(
         PendulumDateTime,
-        default=lambda: pendulum.now(),
+        default=pendulum.now,
         server_default=sa.func.now(),
         onupdate=sa.func.now(),
     )

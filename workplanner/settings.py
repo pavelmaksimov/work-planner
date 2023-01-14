@@ -6,7 +6,8 @@ from workplanner import const
 
 class Settings(ConfZ):
     """
-    Typer (CLI) replaces "_" characters in parameters with "-", so you need to write parameters without using "_",
+    Typer (CLI) replaces "_" characters in parameters with "-",
+    so you need to write parameters without using "_",
     otherwise ConfZ will not see them.
 
     ConfZ converts ENV variables to lowercase, so lowercase must also be used in the config.
@@ -43,14 +44,15 @@ class Settings(ConfZ):
         return f"sqlite:///{db_path}"
 
     @property
-    def logpath(self):
-        dir = const.get_homepath() / "logs"
-        dir.mkdir(exist_ok=True)
+    def logdir(self):
+        return const.get_homepath() / "logs"
 
-        return dir / "workplanner.log"
+    @property
+    def logpath(self):
+        return const.get_homepath() / "logs" / "workplanner.log"
 
     def __init__(self, **kwargs):
-        super(Settings, self).__init__(**kwargs)
+        super().__init__(**kwargs)
 
     @validator("loglevel")
     def validate_loglevel(cls, value):

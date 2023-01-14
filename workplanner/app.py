@@ -1,16 +1,66 @@
+import os
+import sys
+from pathlib import Path
+
 from fastapi import FastAPI, HTTPException
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import ORJSONResponse
+from loguru import logger
 from script_master_helper.workplanner import schemas
 from script_master_helper.workplanner.schemas import Error
 from starlette import status
 from starlette.requests import Request
 from starlette.responses import Response
 
-from workplanner import Settings, errors, service, logger
+from workplanner import errors, service
 from workplanner.database import open_session
 from workplanner.resources import router, API_VERSION
+from workplanner.settings import Settings
+
+fmt = os.environ.get(
+    "LOGURU_FORMAT",
+    "<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | "
+    "<level>{message}</level>",
+)
+
+if os.environ.get("PYTEST") or Path().cwd().name == "tests":
+    logger.configure(
+        handlers=[
+            {
+                "sink": sys.stdout,
+                "level": "DEBUG",
+                "colorize": True,
+                "backtrace": True,
+                "diagnose": True,
+                "format": fmt,
+            }
+        ]
+    )
+else:
+    logger.configure(
+        handlers=[
+            {
+                "sink": sys.stdout,
+                "level": Settings().loglevel,
+                "colorize": True,
+                "backtrace": True,
+                "diagnose": True,
+                "format": fmt,
+            },
+            {
+                "sink": Settings().logpath,
+                "format": fmt,
+                "rotation": Settings().logs_rotation,
+                "retention": Settings().logs_retention,
+                "compression": "zip",
+                "colorize": False,
+                "enqueue": True,
+                "backtrace": True,
+                "diagnose": True,
+            },
+        ]
+    )
 
 app = FastAPI(version=API_VERSION, title="WorkPlanner", debug=Settings().debug)
 app.include_router(router)
@@ -53,8 +103,8 @@ async def custom_http_exception_handler(request, exc: HTTPException):
     if not isinstance(exc.detail, errors.HttpErrorDetail):
         logger.exception("{} {} - {}", request.method, request.url, exc.status_code)
         raise exc
-    else:
-        logger.error(repr(exc))
+
+    logger.error(repr(exc))
 
     return ORJSONResponse(
         status_code=exc.status_code,

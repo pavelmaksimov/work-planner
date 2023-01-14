@@ -1,6 +1,4 @@
-import typer
-
-from workplanner.cli import run
+from workplanner.cli import cli
 
 if __name__ == "__main__":
-    typer.run(run)
+    cli()

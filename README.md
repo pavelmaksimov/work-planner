@@ -12,8 +12,8 @@ or
 Set environment variable `WORKPLANNER_HOME`.\
 After run:
 
-    workplanner run --help
-    workplanner run
+    workplanner --help
+    workplanner
 
 Default port 14444
 

@@ -31,7 +31,8 @@ def update_resource(
 
     if not item:
         raise errors.get_404_exception(
-            f"id={workplan_update.id}, name={workplan_update.name}, worktime={workplan_update.worktime_utc}"
+            f"id={workplan_update.id}, name={workplan_update.name}, "
+            f"worktime={workplan_update.worktime_utc}"
         )
 
     workplan = schemas.Workplan.from_orm(item)
@@ -41,10 +42,10 @@ def update_resource(
 
 @router.post("/workplan/update/list", response_class=ORJSONResponse)
 def update_list_resource(
-    workplans: schemas.WorkplanListGeneric[schemas.WorkplanUpdate],
+    workplans: list[schemas.WorkplanUpdate],
     db: Session = Depends(get_db),
 ):
-    count = len(service.many_update(db, workplans.workplans))
+    count = len(service.many_update(db, workplans))
     return schemas.ResponseGeneric(data=schemas.Affected(count=count))
 
 
@@ -57,7 +58,7 @@ def generate_resource(schema: schemas.GenerateWorkplans, db: Session = Depends(g
 
 
 @router.post("/workplan/generate/child/list", response_class=ORJSONResponse)
-def generate_resource(
+def generate_child_resource(
     schema: schemas.GenerateChildWorkplans, db: Session = Depends(get_db)
 ):
     iterator = service.generate_child_workplans(db, schema)
@@ -113,9 +114,9 @@ def reset_resource(pk: schemas.WorkplanPK, db: Session = Depends(get_db)):
 
 
 @router.get("/workplan/{id}/replay", response_class=ORJSONResponse)
-def run_resource(id: UUID, db: Session = Depends(get_db)):
-    wp = service.run(db, id)
+def run_resource(id_: UUID, db: Session = Depends(get_db)):
+    wp = service.run(db, id_)
     if not wp:
-        raise errors.get_404_exception(f"{id=}")
+        raise errors.get_404_exception(f"{id_=}")
 
     return schemas.ResponseGeneric(data=schemas.Workplan.from_orm(wp))

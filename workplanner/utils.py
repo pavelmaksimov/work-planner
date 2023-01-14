@@ -18,7 +18,7 @@ def iter_range_datetime(
 def iter_range_datetime2(
     start_time: pendulum.DateTime, seconds: int, size: int
 ) -> Iterator[pendulum.DateTime]:
-    for i in range(size):
+    for _ in range(size):
         yield start_time
         start_time += dt.timedelta(seconds=seconds)
 

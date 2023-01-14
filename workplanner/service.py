@@ -10,7 +10,8 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from workplanner import crud, filters, logger
+from workplanner import crud, filters
+from workplanner.app import logger
 from workplanner.models import Workplan
 from workplanner.utils import (
     iter_range_datetime,
@@ -27,13 +28,11 @@ def is_create_next(
     last_executed_item = db.scalar(crud.last(name))
     if last_executed_item:
         result = pendulum.now() - last_executed_item.worktime_utc >= interval_timedelta
+        logger.info("Is create next [{}] {}", name, result)
+
         return result
-    else:
-        result = False
 
-    logger.info("Is create next [{}] {}", name, result)
-
-    return result
+    return False
 
 
 def next_worktime(
@@ -217,7 +216,7 @@ def generate_child_workplans(
             Workplan.status == schema.status_trigger,
         )
         .outerjoin(subquery, subquery.c.worktime_utc == Workplan.worktime_utc)
-        .filter(subquery.c.worktime_utc == None)
+        .filter(subquery.c.worktime_utc is None)
     )
 
     if from_worktime:
@@ -354,8 +353,8 @@ def create_by_worktimes(
     return items
 
 
-def run(db: Session, id: UUID) -> Workplan | None:
-    wp = db.scalar(crud.get_by_id(id))
+def run(db: Session, id_: UUID) -> Workplan | None:
+    wp = db.scalar(crud.get_by_id(id_))
     if wp:
         with db.begin_nested():
             wp.retries += 1

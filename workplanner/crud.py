@@ -65,8 +65,8 @@ class QueryFilter:
             field_filters = getattr(self.schema.filter, name)
             if field_filters is not None:
                 model_field = getattr(Workplan, name)
-                for filter in field_filters:
-                    query = query.where(self.filter_expr(model_field, filter))
+                for filter_ in field_filters:
+                    query = query.where(self.filter_expr(model_field, filter_))
 
         if self.schema.order_by:
             query = query.order_by(*self.schema.order_by)
@@ -116,8 +116,8 @@ def get_by_name(name: str) -> sa.Select:
     return sa.select(Workplan).where(Workplan.name == name)
 
 
-def get_by_id(id) -> sa.Select:
-    return sa.select(Workplan).where(Workplan.id == id)
+def get_by_id(id_) -> sa.Select:
+    return sa.select(Workplan).where(Workplan.id == id_)
 
 
 def last(name: str) -> sa.Select:

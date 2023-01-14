@@ -47,6 +47,7 @@ def run(
         else:
             typer.echo(f"{k.upper()}={v}")
 
+    Settings().logdir.mkdir(exist_ok=True)
     init_models()
 
     config = Config(
