@@ -54,7 +54,7 @@ def session() -> Session:
 
 @pytest.fixture()
 def freeze_time() -> pendulum.DateTime:
-    now = pendulum.datetime(2022, 11, 11, 11, 11, 11, 0, tz="UTC").start_of("second")
+    now = pendulum.datetime(2022, 11, 11, 11, 11, 0, 0, tz="UTC")
     pendulum.set_test_now(now)
     yield now
     pendulum.set_test_now(now)

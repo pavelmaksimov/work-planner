@@ -49,9 +49,18 @@ def update_list_resource(
 
 
 @router.post("/workplan/generate/list", response_class=ORJSONResponse)
-def generate_resource(data: schemas.GenerateWorkplans, db: Session = Depends(get_db)):
-    dct = data.dict(exclude_unset=True)
-    iterator = service.generate_workplans(db, **dct)
+def generate_resource(schema: schemas.GenerateWorkplans, db: Session = Depends(get_db)):
+    iterator = service.generate_workplans(db, schema)
+    workplans = schemas.Workplan.list_from_orm(iterator)
+
+    return schemas.ResponseGeneric(data=workplans)
+
+
+@router.post("/workplan/generate/child/list", response_class=ORJSONResponse)
+def generate_resource(
+    schema: schemas.GenerateChildWorkplans, db: Session = Depends(get_db)
+):
+    iterator = service.generate_child_workplans(db, schema)
     workplans = schemas.Workplan.list_from_orm(iterator)
 
     return schemas.ResponseGeneric(data=workplans)

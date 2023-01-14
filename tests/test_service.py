@@ -3,7 +3,11 @@ from datetime import timedelta
 import pendulum
 import sqlalchemy as sa
 from script_master_helper.workplanner.enums import Statuses, Error
-from script_master_helper.workplanner.schemas import WorkplanUpdate
+from script_master_helper.workplanner.schemas import (
+    WorkplanUpdate,
+    GenerateWorkplans,
+    GenerateChildWorkplans,
+)
 
 from tests.factories import WorkplanFactory
 from workplanner import crud
@@ -123,14 +127,26 @@ def test_create_next_or_none(session, freeze_time):
 
     pendulum.set_test_now(freeze_time + timedelta(seconds=interval * size))
     item = service.create_next_or_none(
-        session, name, timedelta(seconds=interval), data=dict(status=Statuses.queue)
+        session,
+        GenerateWorkplans(
+            name=name,
+            start_time=freeze_time,
+            interval_in_seconds=interval,
+            extra=GenerateWorkplans.Extra(status=Statuses.queue),
+        ),
     )
 
     assert item is None
 
     pendulum.set_test_now(freeze_time + timedelta(seconds=interval * 10))
     item = service.create_next_or_none(
-        session, name, timedelta(seconds=interval), data=dict(status=Statuses.queue)
+        session,
+        GenerateWorkplans(
+            name=name,
+            start_time=freeze_time,
+            interval_in_seconds=interval,
+            extra=GenerateWorkplans.Extra(status=Statuses.queue),
+        ),
     )
     session.commit()
     item = session.scalar(crud.get_by_id(item.id))
@@ -155,10 +171,12 @@ def test_fill_missing(session):
 
     items = service.fill_missing(
         session,
-        name,
-        timedelta(seconds=interval),
-        start_time=freeze_time,
-        data=dict(status=Statuses.queue),
+        GenerateWorkplans(
+            name=name,
+            start_time=freeze_time,
+            interval_in_seconds=interval,
+            extra=GenerateWorkplans.Extra(status=Statuses.queue),
+        ),
     )
     worktimes = [wp.worktime_utc for wp in items]
 
@@ -178,7 +196,14 @@ def test_recreate_prev(session):
     pendulum.set_test_now(freeze_time + timedelta(seconds=interval * size))
 
     items = service.recreate_prev(
-        session, name, offset_periods=2, interval_timedelta=timedelta(seconds=interval)
+        session,
+        GenerateWorkplans(
+            name=name,
+            start_time=freeze_time,
+            interval_in_seconds=interval,
+            back_restarts=2,
+            extra=GenerateWorkplans.Extra(status=Statuses.queue),
+        ),
     )
 
     assert tuple(i.worktime_utc for i in items) == (
@@ -198,9 +223,13 @@ def test_recreate_prev2(session):
 
     items = service.recreate_prev(
         session,
-        name,
-        offset_periods=[-1, -3],
-        interval_timedelta=timedelta(seconds=interval),
+        GenerateWorkplans(
+            name=name,
+            start_time=freeze_time,
+            interval_in_seconds=interval,
+            back_restarts=[-1, -3],
+            extra=GenerateWorkplans.Extra(status=Statuses.queue),
+        ),
     )
 
     assert tuple(i.worktime_utc for i in items) == (
@@ -217,8 +246,15 @@ def test_is_allowed_execute(session):
     interval = 60
     name = "test_is_allowed_execute"
     WorkplanFactory.create_many(size, interval, name=name, hash="1")
+    schema = GenerateWorkplans(
+        name=name,
+        start_time=freeze_time,
+        interval_in_seconds=interval,
+        max_fatal_errors=3,
+        extra=GenerateWorkplans.Extra(hash="1"),
+    )
 
-    assert service.is_allowed_execute(session, name, "1", max_fatal_errors=3) is True
+    assert service.is_allowed_execute(session, schema) is True
 
 
 def test_is_not_allowed_execute(session):
@@ -231,9 +267,23 @@ def test_is_not_allowed_execute(session):
     WorkplanFactory.create_many(
         size, interval, name=name, status=Statuses.fatal_error, hash="1"
     )
+    schema1 = GenerateWorkplans(
+        name=name,
+        start_time=freeze_time,
+        interval_in_seconds=interval,
+        max_fatal_errors=3,
+        extra=GenerateWorkplans.Extra(hash="1"),
+    )
+    schema2 = GenerateWorkplans(
+        name=name,
+        start_time=freeze_time,
+        interval_in_seconds=interval,
+        max_fatal_errors=3,
+        extra=GenerateWorkplans.Extra(hash="2"),
+    )
 
-    assert service.is_allowed_execute(session, name, "1", max_fatal_errors=3) is False
-    assert service.is_allowed_execute(session, name, "2", max_fatal_errors=3) is True
+    assert service.is_allowed_execute(session, schema1) is False
+    assert service.is_allowed_execute(session, schema2) is True
 
 
 def test_update_errors_max_retries(session):
@@ -251,8 +301,15 @@ def test_update_errors_max_retries(session):
     WorkplanFactory(
         name=name, status=Statuses.add, retries=0, worktime_utc=freeze_time.add(3)
     )
+    schema = GenerateWorkplans(
+        name=name,
+        start_time=freeze_time,
+        interval_in_seconds=60,
+        max_fatal_errors=3,
+        extra=GenerateWorkplans.Extra(max_retries=3, retry_delay=60),
+    )
 
-    items = service.update_errors(session, name, max_retries=3, retry_delay=60)
+    items = service.update_errors(session, schema)
 
     assert len(items) == 1
     assert items[0].retries == 3
@@ -273,8 +330,15 @@ def test_update_errors_retry_delay(session):
     WorkplanFactory(
         name=name, status=Statuses.error, retries=0, finished_utc=freeze_time
     )
+    schema = GenerateWorkplans(
+        name=name,
+        start_time=freeze_time,
+        interval_in_seconds=60,
+        max_fatal_errors=3,
+        extra=GenerateWorkplans.Extra(max_retries=3, retry_delay=60),
+    )
 
-    items = service.update_errors(session, name, max_retries=3, retry_delay=60)
+    items = service.update_errors(session, schema)
 
     assert not items
 
@@ -293,8 +357,16 @@ def test_update_errors_expired(session):
     WorkplanFactory(
         name=name, status=Statuses.error, retries=3, expires_utc=freeze_time
     )
+    schema = GenerateWorkplans(
+        name=name,
+        start_time=freeze_time,
+        interval_in_seconds=60,
+        max_fatal_errors=3,
+        retry_delay=0,
+        extra=GenerateWorkplans.Extra(max_retries=3),
+    )
 
-    items = service.update_errors(session, name, max_retries=3, retry_delay=0)
+    items = service.update_errors(session, schema)
 
     assert not items
 
@@ -350,35 +422,41 @@ def test_check_expiration(session):
     assert items[0].info == Error.expired
 
 
-def test_iter_generate_child_workplans(session):
+def test_generate_child_workplans(session):
     freeze_time = pendulum.datetime(2022, 1, 10)
     pendulum.set_test_now(freeze_time)
 
     interval = 60
-    name = "test_iter_generate_child_workplans"
+    name = "test_generate_child_workplans"
     WorkplanFactory.create_many(5, interval, name=name, status=Statuses.success)
-    name_child = "test_iter_generate_child_workplans_child"
+    name_child = "test_generate_child_workplans_child"
     WorkplanFactory.create_many(3, interval, name=name_child)
 
-    items = service.iter_generate_child_workplans(
-        session, name=name_child, parent_name=name, status_trigger=Statuses.success
+    items = service.generate_child_workplans(
+        session,
+        GenerateChildWorkplans(
+            name=name_child, parent_name=name, status_trigger=Statuses.success
+        ),
     )
 
     assert [i.worktime_utc.minute for i in items] == [4, 5]
 
 
-def test_iter_generate_child_workplans_status_trigger(session):
+def test_generate_child_workplans_status_trigger(session):
     freeze_time = pendulum.datetime(2022, 1, 10)
     pendulum.set_test_now(freeze_time)
 
     interval = 60
-    name = "test_iter_generate_child_workplans"
+    name = "test_generate_child_workplans"
     WorkplanFactory.create_many(5, interval, name=name, status=Statuses.error)
-    name_child = "test_iter_generate_child_workplans_child"
+    name_child = "test_generate_child_workplans_child"
     WorkplanFactory.create_many(3, interval, name=name_child)
 
-    items = service.iter_generate_child_workplans(
-        session, name=name_child, parent_name=name, status_trigger=Statuses.success
+    items = service.generate_child_workplans(
+        session,
+        GenerateChildWorkplans(
+            name=name_child, parent_name=name, status_trigger=Statuses.success
+        ),
     )
 
     assert not list(items)
@@ -386,17 +464,14 @@ def test_iter_generate_child_workplans_status_trigger(session):
 
 def test_generate_workplans_first(session, freeze_time):
     interval = 60
-    items = service.generate_workplans(
-        session,
+    schema = GenerateWorkplans(
         name="test_generate_workplans_first",
         start_time=freeze_time.add(seconds=-interval * 3),
         interval_in_seconds=interval,
         keep_sequence=False,
-        max_retries=3,
-        retry_delay=60,
-        notebook_hash="",
         max_fatal_errors=3,
     )
+    items = service.generate_workplans(session, schema)
     worktimes = [i.worktime_utc for i in items]
 
     assert len(worktimes) == 1
@@ -405,17 +480,13 @@ def test_generate_workplans_first(session, freeze_time):
 
 def test_generate_workplans_fill_missing(session, freeze_time):
     interval = 60
-    items = service.generate_workplans(
-        session,
+    schema = GenerateWorkplans(
         name="test_generate_workplans_first_and_fill_missing",
         start_time=freeze_time.add(seconds=-interval * 3),
         interval_in_seconds=interval,
         keep_sequence=True,
-        max_retries=3,
-        retry_delay=60,
-        notebook_hash="",
-        max_fatal_errors=3,
     )
+    items = service.generate_workplans(session, schema)
     worktimes = [i.worktime_utc.minute for i in items]
 
     assert len(worktimes) == 4
